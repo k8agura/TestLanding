@@ -130,8 +130,23 @@ function setupParticipantsSlider() {
   let autoTimer = null;
   let isAnimating = false;
   let index = 0;
+  let currentPerView = 1;
   let itemsToClone = 1;
   let resizeTimer = null;
+  let pointerStart = null;
+
+  function restoreTransition() {
+    requestAnimationFrame(() => {
+      track.style.transition = `transform 0.55s var(--easing)`;
+    });
+  }
+
+  function moveInstantly(targetIndex) {
+    track.style.transition = "none";
+    moveTo(targetIndex);
+    track.offsetHeight;
+    restoreTransition();
+  }
 
   function cardsPerView() {
     if (window.innerWidth <= 767) return 1;
@@ -139,17 +154,18 @@ function setupParticipantsSlider() {
     return 3;
   }
 
-  function rebuildTrack() {
-    itemsToClone = cardsPerView();
+  function normalize(value) {
+    return ((value % total) + total) % total;
+  }
+
+  function rebuildTrack(logicalIndex = 0) {
+    currentPerView = cardsPerView();
+    itemsToClone = currentPerView;
     const prepend = data.slice(-itemsToClone);
     const append = data.slice(0, itemsToClone);
     track.innerHTML = [...prepend, ...data, ...append].join("");
-    index = itemsToClone;
-    track.style.transition = "none";
-    moveTo(index);
-    requestAnimationFrame(() => {
-      track.style.transition = `transform 0.55s var(--easing)`;
-    });
+    index = itemsToClone + normalize(logicalIndex);
+    moveInstantly(index);
     updateCounter();
   }
 
@@ -165,30 +181,28 @@ function setupParticipantsSlider() {
   }
 
   function normalizedIndex() {
-    return ((index - itemsToClone) % total + total) % total;
+    return normalize(index - itemsToClone);
   }
 
   function updateCounter() {
-    current.textContent = String(normalizedIndex() + 1);
+    const lastVisibleCard = Math.min(normalizedIndex() + currentPerView, total);
+    current.textContent = String(lastVisibleCard);
   }
 
   function jumpIfNeeded() {
+    let nextIndex = index;
+
     if (index >= total + itemsToClone) {
-      index = itemsToClone;
-      track.style.transition = "none";
-      moveTo(index);
-      requestAnimationFrame(() => {
-        track.style.transition = `transform 0.55s var(--easing)`;
-      });
+      nextIndex = index - total;
     }
 
     if (index < itemsToClone) {
-      index = total + itemsToClone - 1;
-      track.style.transition = "none";
-      moveTo(index);
-      requestAnimationFrame(() => {
-        track.style.transition = `transform 0.55s var(--easing)`;
-      });
+      nextIndex = index + total;
+    }
+
+    if (nextIndex !== index) {
+      index = nextIndex;
+      moveInstantly(index);
     }
   }
 
@@ -201,11 +215,11 @@ function setupParticipantsSlider() {
   }
 
   function goNext() {
-    slideTo(index + 1);
+    slideTo(index + currentPerView);
   }
 
   function goPrev() {
-    slideTo(index - 1);
+    slideTo(index - currentPerView);
   }
 
   function startAuto() {
@@ -221,7 +235,9 @@ function setupParticipantsSlider() {
     }
   }
 
-  track.addEventListener("transitionend", () => {
+  track.addEventListener("transitionend", (event) => {
+    if (event.target !== track || event.propertyName !== "transform") return;
+
     isAnimating = false;
     jumpIfNeeded();
     updateCounter();
@@ -244,6 +260,43 @@ function setupParticipantsSlider() {
   viewport.addEventListener("focusin", stopAuto);
   viewport.addEventListener("focusout", startAuto);
 
+  viewport.addEventListener("pointerdown", (event) => {
+    if (event.button !== undefined && event.button !== 0) return;
+
+    pointerStart = {
+      id: event.pointerId,
+      x: event.clientX,
+      y: event.clientY,
+    };
+    viewport.setPointerCapture?.(event.pointerId);
+    stopAuto();
+  });
+
+  viewport.addEventListener("pointerup", (event) => {
+    if (!pointerStart || pointerStart.id !== event.pointerId) return;
+
+    const deltaX = event.clientX - pointerStart.x;
+    const deltaY = event.clientY - pointerStart.y;
+    const isHorizontalSwipe = Math.abs(deltaX) > 48 && Math.abs(deltaX) > Math.abs(deltaY) * 1.2;
+
+    if (isHorizontalSwipe) {
+      event.preventDefault();
+      if (deltaX < 0) {
+        goNext();
+      } else {
+        goPrev();
+      }
+    }
+
+    pointerStart = null;
+    startAuto();
+  });
+
+  viewport.addEventListener("pointercancel", () => {
+    pointerStart = null;
+    startAuto();
+  });
+
   document.addEventListener("visibilitychange", () => {
     if (document.hidden) {
       stopAuto();
@@ -256,17 +309,17 @@ function setupParticipantsSlider() {
     document.body.classList.add("is-resizing");
     window.clearTimeout(resizeTimer);
 
-    const previousLogical = normalizedIndex();
-    rebuildTrack();
-    index = itemsToClone + previousLogical;
-    track.style.transition = "none";
-    moveTo(index);
-    requestAnimationFrame(() => {
-      track.style.transition = `transform 0.55s var(--easing)`;
-    });
-    updateCounter();
-
     resizeTimer = window.setTimeout(() => {
+      const previousLogical = normalizedIndex();
+      const nextPerView = cardsPerView();
+
+      if (nextPerView !== currentPerView) {
+        rebuildTrack(previousLogical);
+      } else {
+        moveInstantly(index);
+        updateCounter();
+      }
+
       document.body.classList.remove("is-resizing");
     }, 120);
   });

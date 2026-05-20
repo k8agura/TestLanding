@@ -489,6 +489,7 @@ button {
 
 .participants__viewport {
   overflow: hidden;
+  touch-action: pan-y;
 }
 
 .participants__track {
@@ -510,6 +511,8 @@ button {
 .participant-card__image {
   width: min(320px, 100%);
   margin-bottom: 28px;
+  user-select: none;
+  -webkit-user-drag: none;
 }
 
 .participant-card__title {
