@@ -334,8 +334,8 @@ button {
 
 .stages__subtitle {
   position: absolute;
-  left: 301px;
-  bottom: 0;
+  left: 306px;
+  top: 68px;
   max-width: 280px;
   margin: 0;
   color: var(--text-note);
