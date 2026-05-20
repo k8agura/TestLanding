@@ -124,6 +124,18 @@ function setupParticipantsSlider() {
   if (!viewport || !track || !prev || !next || !current) return;
 
   const sourceCards = Array.from(track.children);
+  const participantImages = sourceCards.flatMap((card) => Array.from(card.querySelectorAll("img")));
+
+  participantImages.forEach((image) => {
+    image.loading = "eager";
+    image.decoding = "sync";
+    image.draggable = false;
+
+    const preload = new Image();
+    preload.src = image.currentSrc || image.src;
+    preload.decode?.().catch(() => {});
+  });
+
   const data = sourceCards.map((card) => card.outerHTML);
   const total = data.length;
 
@@ -184,8 +196,12 @@ function setupParticipantsSlider() {
     return normalize(index - itemsToClone);
   }
 
+  function activeGroupStart() {
+    return Math.floor(normalizedIndex() / currentPerView) * currentPerView;
+  }
+
   function updateCounter() {
-    const lastVisibleCard = Math.min(normalizedIndex() + currentPerView, total);
+    const lastVisibleCard = Math.min(activeGroupStart() + currentPerView, total);
     current.textContent = String(lastVisibleCard);
   }
 
@@ -211,7 +227,6 @@ function setupParticipantsSlider() {
     isAnimating = true;
     index = nextIndex;
     moveTo(index);
-    updateCounter();
   }
 
   function goNext() {
